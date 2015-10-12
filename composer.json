@@ -1,0 +1,20 @@
+{
+    "name": "calcinai/bolt",
+    "description": "Asynchronous WebSocket client",
+    "type": "Library",
+    "require": {
+        "react/socket-client": "^0.4.4"
+    },
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Michael Calcinai",
+            "email": "michael@calcin.ai"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "Calcinai\\Bolt\\": "src/"
+        }
+    }
+}
