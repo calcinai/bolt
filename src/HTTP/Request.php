@@ -4,7 +4,7 @@
  * @author     Michael Calcinai <michael@calcin.ai>
  */
 
-namespace Calcinai\Bolt;
+namespace Calcinai\Bolt\HTTP;
 
 
 class Request {

@@ -4,8 +4,10 @@
  * @author     Michael Calcinai <michael@calcin.ai>
  */
 
-namespace Calcinai\Bolt;
+namespace Calcinai\Bolt\HTTP;
 
+
+use Calcinai\Bolt\Exception\ForbiddenException;
 
 class Response {
 
@@ -48,6 +50,10 @@ class Response {
 
         list(, $status_code, $status_message) = explode(' ', $status_line, 3);
 
+        //Go off and throw exceptions if need be.
+        self::checkStatusCode($status_code, $status_message);
+
+        //If no exceptions thrown, continue to process headers etc.
         $headers = [];
         foreach($header_lines as $line){
             list($header_name, $header_value) = explode(':', $line, 2);
@@ -60,5 +66,11 @@ class Response {
 
     }
 
+    public static function checkStatusCode($code, $message){
+        switch($code){
+            case 403:
+                throw new ForbiddenException($message);
+        }
+    }
 
 }

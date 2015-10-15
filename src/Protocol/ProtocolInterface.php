@@ -9,6 +9,6 @@ namespace Calcinai\Bolt\Protocol;
 
 interface ProtocolInterface {
     public function upgrade();
-    public function onStreamData(&$data);
+    public function onStreamData(&$buffer);
     public static function getVersion();
 }

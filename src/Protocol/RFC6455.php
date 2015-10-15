@@ -7,11 +7,24 @@
 namespace Calcinai\Bolt\Protocol;
 
 use Calcinai\Bolt\Client;
-use Calcinai\Bolt\Request;
-use Calcinai\Bolt\Response;
+use Calcinai\Bolt\Exception\IncompleteFrameException;
+use Calcinai\Bolt\Exception\IncompletePayloadException;
+use Calcinai\Bolt\HTTP\Request;
+use Calcinai\Bolt\HTTP\Response;
+use Calcinai\Bolt\Message;
+use Calcinai\Bolt\Protocol\RFC6455\Frame;
 
 class RFC6455 extends AbstractProtocol {
 
+    /**
+     * @var Frame
+     */
+    private $current_frame;
+
+    /**
+     * @var Message
+     */
+    private $current_message;
     private $websocket_key;
 
     const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
@@ -21,48 +34,74 @@ class RFC6455 extends AbstractProtocol {
         $this->sendUpgradeRequest();
     }
 
-    public function onStreamData(&$data) {
-
+    public function onStreamData(&$buffer) {
 
         if($this->client->getState() !== Client::STATE_CONNECTED){
 
-            if(null === $response = Response::create($data)){
-                return;
+            if(null === $response = Response::create($buffer)){
+                return false;
             }
 
             $this->processUpgrade($response);
+            return true;
+
         } else {
-            echo $data;
+            try {
+                if(!isset($this->current_frame)){
+                    $this->current_frame = new Frame();
+                }
+                $overflow = $this->current_frame->appendBuffer($buffer);
+            } catch (IncompletePayloadException $e){
+                return true;
+            } catch (IncompleteFrameException $e){
+                return false;
+            }
+
         }
 
+        //At this point we have a complete frame
+        $this->processFrame($this->current_frame);
 
+        unset($this->current_frame);
 
-
-
-//        if(!$this->connected){
-//            if (!$this->containsCompleteHeader($data)) {
-//                return array();
-//            }
-//            $data = $this->readHandshakeResponse($data);
-//        }
-//
-//        $frames = array();
-//        while ($frame = WebSocketFrame::decode($data)){
-//            if (WebSocketOpcode::isControlFrame($frame->getType()))
-//                $this->processControlFrame($frame);
-//            else
-//                $this->processMessageFrame($frame);
-//
-//            $frames[] = $frame;
-//        }
-//
-//
-//
-//
-
-
+        //Now that we're done, we can repeat/recurse for the overflow as fragment is PBR
+        if($overflow !== ''){
+            $this->onStreamData($overflow);
+        }
+        return true;
     }
 
+
+    private function processFrame(Frame $frame) {
+
+        switch($frame->getOpcode()){
+            case Frame::OP_BINARY:
+            case Frame::OP_TEXT:
+            case Frame::OP_CONTINUE:
+                $this->addFragmentToMessage($frame);
+                break;
+            case Frame::OP_PING:
+                //TODO - send pong
+                break;
+            case Frame::OP_CLOSE:
+                //TODO - close
+                break;
+        }
+    }
+
+    private function addFragmentToMessage(Frame $frame) {
+        if(!isset($this->current_message)){
+            $this->current_message = new Message();
+        }
+
+        $this->current_message->addBody($frame->getPayload())
+            ->setIsComplete($frame->isFinalFragment());
+
+        if($this->current_message->isComplete()){
+            $this->client->emit('message', [$this->current_message]);
+            unset($this->current_message);
+        }
+    }
 
 
     /**
@@ -119,5 +158,6 @@ class RFC6455 extends AbstractProtocol {
     public static function getVersion() {
         return 10;
     }
+
 
 }

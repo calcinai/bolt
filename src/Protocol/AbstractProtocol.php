@@ -27,7 +27,15 @@ abstract class AbstractProtocol implements ProtocolInterface {
 
         $that = $this;
         $this->stream->on('data', function($data) use($that){
-            $that->onStreamData($data);
+            static $buffer;
+
+            //Handle partial chunks.
+            $buffer .= $data;
+
+            //If the handler returns true, was successfully processed and can empty buffer
+            if($that->onStreamData($buffer)){
+                $buffer = '';
+            }
         });
     }
 

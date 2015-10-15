@@ -7,12 +7,11 @@
 
 namespace Calcinai\Bolt;
 
-use Calcinai\Bolt\Stream\Connector;
+use Calcinai\Bolt\HTTP\Request;
 use Calcinai\Bolt\Protocol\ProtocolInterface;
 use Calcinai\Bolt\Protocol\RFC6455;
-
+use Calcinai\Bolt\Stream\Connector;
 use Evenement\EventEmitter;
-
 use React\Dns\Resolver\Resolver;
 use React\EventLoop\LoopInterface;
 use React\SocketClient\SecureConnector;
