@@ -15,8 +15,8 @@ $client->on('stateChange', function($newState){
     echo "State changed to: $newState\n";
 });
 
-$client->on('message', function($message){
-    print_r($message);
+$client->on('message', function($message) use ($client){
+    
 });
 
 $loop->run();

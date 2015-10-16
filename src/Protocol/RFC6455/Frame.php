@@ -41,9 +41,28 @@ class Frame {
     const FRAME_BITS_MASKED = 1;
     const FRAME_BITS_LENGTH = 7;
 
+    const EXT_PAYLOAD_BITS_S = 16;
+    const EXT_PAYLOAD_BITS_L = 64;
 
-    public function __construct(){
+    public function __construct($payload = null, $opcode = null, $fin = true){
+
         $this->meta_decoded = false;
+
+        if($payload === null || $opcode === null){
+            return;
+        }
+
+        $this->frame_fin = $fin ? 0b1 : 0b0;
+        $this->frame_rsv1 = 0b0;
+        $this->frame_rsv2 = 0b0;
+        $this->frame_rsv3 = 0b0;
+        $this->frame_opcode = $opcode;
+        $this->frame_masked = 0b0;
+        $this->frame_length = strlen($payload);
+
+        $this->payload = $payload;
+
+
     }
 
     public function isMasked() {
@@ -63,6 +82,52 @@ class Frame {
         return $this->payload;
     }
 
+
+    public function encode($masked = true){
+
+        $this->frame_masked = $masked ? 0b1 : 0b0;
+
+        $control = 0;
+        self::addBits($control, self::FRAME_BITS_FIN, $this->frame_fin);
+        self::addBits($control, self::FRAME_BITS_RSV1, $this->frame_rsv1); //Reserved
+        self::addBits($control, self::FRAME_BITS_RSV2, $this->frame_rsv2); //Reserved
+        self::addBits($control, self::FRAME_BITS_RSV3, $this->frame_rsv3); //Reserved
+        self::addBits($control, self::FRAME_BITS_OPCODE, $this->frame_opcode);
+        self::addBits($control, self::FRAME_BITS_MASKED, $this->frame_masked);
+
+        //Work out how many extended bits need to be added based on payload size
+        if ($this->frame_length > pow(2, self::EXT_PAYLOAD_BITS_S) -1) {
+            // >16 bit - 8 bytes size
+            self::addBits($control, self::FRAME_BITS_LENGTH, 127);
+
+            $low = $this->frame_length & pow(2, 32) - 1;
+            $high = $this->frame_length >> 32;
+            $packed = pack('nNN', $control, $high, $low);
+
+        } elseif($this->frame_length > 125) {
+            // 2 bytes size
+            self::addBits($control, self::FRAME_BITS_LENGTH, 126);
+
+            $packed = pack('nn', $control, $this->frame_length);
+        } else {
+            // standard size frame
+            self::addBits($control, self::FRAME_BITS_LENGTH, $this->frame_length);
+            $packed = pack('n', $control);
+        }
+
+        if($this->isMasked()){
+            $this->masking_key = self::generateMaskingKey();
+            $packed .= pack('N', $this->masking_key);
+            self::mask($this->payload, $this->masking_key);
+        }
+
+        $packed .= $this->payload;
+
+        return $packed;
+
+    }
+
+
     /**
      * @param $buffer
      * @return string
@@ -79,15 +144,10 @@ class Frame {
     public function appendPayload($buffer){
 
         if($this->isMasked()){
-            //What good does this even do!?
-            $mask_size = strlen($this->masking_key);
-            foreach(str_split($buffer, $mask_size) as $chunk){
-                $this->payload .= $chunk ^ ($this->masking_key >> ($mask_size - strlen($chunk))); //That strlen catches the remainder.
-            }
-        } else {
-            $this->payload .= $buffer;
+            self::mask($buffer, $this->masking_key);
         }
 
+        $this->payload .= $buffer;
 
         $payload_length = strlen($this->payload);
         if($payload_length < $this->frame_length){
@@ -134,17 +194,6 @@ class Frame {
     }
 
 
-
-    public static function extractBits(&$data, $num_bits){
-
-        //Calculate the product
-        $bits = $data & pow(2, $num_bits) - 1;
-        //Shift off the read bits
-        $data = $data >> $num_bits;
-
-        return $bits;
-    }
-
     private function eatBytes(&$buffer, $num_bytes){
 
         if(!isset($buffer[$num_bytes])){
@@ -156,5 +205,46 @@ class Frame {
 
         return $consumed;
     }
+
+    public static function extractBits(&$data, $num_bits){
+
+        //Calculate the product
+        $bits = $data & pow(2, $num_bits) - 1;
+        //Shift off the read bits
+        $data = $data >> $num_bits;
+
+        return $bits;
+    }
+
+    private static function addBits(&$data, $num_bits, $bits){
+
+        $data = $data << $num_bits;
+        $data |= $bits;
+    }
+
+
+    public static function generateMaskingKey() {
+        $mask = 0;
+
+        for ($i = 0; $i < 32; $i += 8) {
+            $mask |= rand(32, 255) << $i;
+        }
+
+        return $mask;
+    }
+
+
+    private static function mask(&$data, $masking_key) {
+
+        $data_size = strlen($data);
+
+        for($i = 0; $i < $data_size; $i++) {
+            $remainder = 3 - $i % 4; //work backward through the masking key
+            $shift_bits = $remainder * 8; //Make the shift a whole byte
+            $xor = $masking_key >> $shift_bits;
+            $data[$i] = $data[$i] ^ chr($xor);
+        }
+    }
+
 
 }

@@ -21,6 +21,10 @@ class Message {
         return $this;
     }
 
+    public function getBody() {
+        return $this->body;
+    }
+
     public function isComplete() {
         return $this->is_complete;
     }

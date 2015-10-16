@@ -144,4 +144,8 @@ class Client extends EventEmitter {
         return $this;
     }
 
+    public function send($string) {
+        $this->transport->send($string);
+    }
+
 }

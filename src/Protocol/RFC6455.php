@@ -98,7 +98,7 @@ class RFC6455 extends AbstractProtocol {
             ->setIsComplete($frame->isFinalFragment());
 
         if($this->current_message->isComplete()){
-            $this->client->emit('message', [$this->current_message]);
+            $this->client->emit('message', [$this->current_message->getBody()]);
             unset($this->current_message);
         }
     }
@@ -137,13 +137,20 @@ class RFC6455 extends AbstractProtocol {
 
     }
 
-
     public function getExpectedAcceptKey(){
         if(!isset($this->websocket_key)){
             //todo handle
         }
         return base64_encode(pack('H*', sha1($this->websocket_key . self::WEBSOCKET_GUID)));
     }
+
+
+    public function send($string, $type = Frame::OP_TEXT) {
+        $frame = new Frame($string, $type);
+        $this->stream->write($frame->encode());
+    }
+
+
 
     protected static function generateKey() {
         static $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"$&/()=[]{}0123456789';
@@ -158,6 +165,5 @@ class RFC6455 extends AbstractProtocol {
     public static function getVersion() {
         return 10;
     }
-
 
 }
