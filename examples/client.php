@@ -16,7 +16,7 @@ $client->on('stateChange', function($newState){
 });
 
 $client->on('message', function($message) use ($client){
-    
+
 });
 
 $loop->run();
