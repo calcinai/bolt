@@ -8,6 +8,7 @@ namespace Calcinai\Bolt\HTTP;
 
 
 use Calcinai\Bolt\Exception\ForbiddenException;
+use Calcinai\Bolt\Exception\NotFoundException;
 
 class Response {
 
@@ -70,6 +71,8 @@ class Response {
         switch($code){
             case 403:
                 throw new ForbiddenException($message);
+            case 404:
+                throw new NotFoundException($message);
         }
     }
 
