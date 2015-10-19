@@ -44,6 +44,13 @@ class Request {
             $path = sprintf('%s?%s', $path, $uri->query);
         }
 
+        $user = isset($uri->user) ? $uri->user : '';
+        $pass = isset($uri->pass) ? $uri->pass : '';
+
+        if(!empty($user) || !empty($pass)){
+            $this->setHeader('Authorization', sprintf('Basic %s', base64_encode("$user:$pass")));
+        }
+
         $this->setHeader('Host', $uri->host);
         $this->setPath($path);
         return $this;
