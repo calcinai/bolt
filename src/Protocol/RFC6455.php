@@ -43,21 +43,28 @@ class RFC6455 extends AbstractProtocol {
             }
 
             $this->processUpgrade($response);
-            return true;
 
-        } else {
-            try {
-                if(!isset($this->current_frame)){
-                    $this->current_frame = new Frame();
-                }
-                $overflow = $this->current_frame->appendBuffer($buffer);
-            } catch (IncompletePayloadException $e){
+            //In this case, the response will have no body if it was just an upgrade
+            if(!$response->hasBody()){
                 return true;
-            } catch (IncompleteFrameException $e){
-                return false;
             }
 
+            //If we get to here, it had some body which will be the beginning of a (or complete) WS frame
+            $buffer = $response->getBody();
         }
+
+
+        try {
+            if(!isset($this->current_frame)){
+                $this->current_frame = new Frame();
+            }
+            $overflow = $this->current_frame->appendBuffer($buffer);
+        } catch (IncompletePayloadException $e){
+            return true;
+        } catch (IncompleteFrameException $e){
+            return false;
+        }
+
 
         //At this point we have a complete frame
         $this->processFrame($this->current_frame);

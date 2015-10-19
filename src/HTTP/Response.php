@@ -8,6 +8,7 @@ namespace Calcinai\Bolt\HTTP;
 
 
 use Calcinai\Bolt\Exception\ForbiddenException;
+use Calcinai\Bolt\Exception\NotFoundException;
 
 class Response {
 
@@ -16,14 +17,14 @@ class Response {
 
     private $headers;
 
-    private $data;
+    private $body;
 
 
-    public function __construct($status, $message, $headers, $data){
+    public function __construct($status, $message, $headers, $body){
         $this->status = $status;
         $this->message = $message;
         $this->headers = $headers;
-        $this->data = $data;
+        $this->body = $body;
     }
 
     public function hasHeader($header_name){
@@ -32,6 +33,14 @@ class Response {
 
     public function getHeader($header_name){
         return $this->headers[$header_name];
+    }
+
+    public function hasBody(){
+        return strlen($this->body) > 0;
+    }
+
+    public function getBody(){
+        return $this->body;
     }
 
     public static function create($data){
@@ -70,6 +79,8 @@ class Response {
         switch($code){
             case 403:
                 throw new ForbiddenException($message);
+            case 404:
+                throw new NotFoundException($message);
         }
     }
 
