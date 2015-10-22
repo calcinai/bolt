@@ -138,29 +138,34 @@ class Frame {
             $this->decode($buffer);
         }
 
-        $this->appendPayload($buffer);
+        return $this->appendPayload($buffer);
     }
 
     public function appendPayload($buffer){
 
-        if($this->isMasked()){
-            self::mask($buffer, $this->masking_key);
-        }
-
-        $this->payload .= $buffer;
-
         $payload_length = strlen($this->payload);
-        if($payload_length < $this->frame_length){
+        $outstanding = $this->frame_length - $payload_length;
+        $available_length = $payload_length + strlen($buffer);
+
+        if($available_length < $outstanding){
             //Underrun
             throw new IncompletePayloadException($this);
-        } elseif($payload_length > $this->frame_length){
-            //Overflow
-            $this->payload = substr($this->payload, 0, $this->frame_length);
-            return substr($this->payload, $this->frame_length);
-        } else{
-            //No underrun/overflow
-            return null;
         }
+
+        $buffer_to_append = substr($buffer, 0, $outstanding);
+
+        if($this->isMasked()){
+            self::mask($buffer_to_append, $this->masking_key);
+        }
+
+        $this->payload .= $buffer_to_append;
+
+        if($available_length > $outstanding){
+            //Overflow - get what's past what's outstanding
+            return substr($buffer, $outstanding);
+        }
+
+        return null;
 
     }
 
