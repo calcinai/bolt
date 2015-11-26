@@ -21,22 +21,29 @@ abstract class AbstractProtocol implements ProtocolInterface {
      */
     protected $stream;
 
-    public function __construct(Client $client, DuplexStreamInterface $stream){
+    public function __construct(Client $client, DuplexStreamInterface $stream) {
         $this->client = $client;
         $this->stream = $stream;
 
         $that = $this;
-        $this->stream->on('data', function($data) use($that){
+        $this->stream->on(
+            'data', function ($data) use ($that) {
             static $buffer;
 
             //Handle partial chunks.
             $buffer .= $data;
 
             //If the handler returns true, was successfully processed and can empty buffer
-            if($that->onStreamData($buffer)){
+            if($that->onStreamData($buffer)) {
                 $buffer = '';
             }
         });
+
+        $this->stream->on(
+            'close', function () use ($client) {
+            $client->setState(Client::STATE_CLOSED);
+        });
+
     }
 
 }

@@ -105,7 +105,7 @@ class Client extends EventEmitter {
             $that->transport->upgrade();
         });
 
-        $this->state = self::STATE_CONNECTING;
+        $this->setState(self::STATE_CONNECTING);
     }
 
     public function setState($state){
