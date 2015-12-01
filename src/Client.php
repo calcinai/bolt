@@ -82,6 +82,7 @@ class Client extends EventEmitter {
         $this->loop = $loop;
         $this->resolver = $resolver;
         $this->state = self::STATE_CLOSED;
+        $this->heartbeat_interval = null;
     }
 
     public function connect() {

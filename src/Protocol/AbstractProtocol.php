@@ -60,7 +60,7 @@ abstract class AbstractProtocol implements ProtocolInterface {
         }
 
         $this->client->getLoop()->addTimer($this->client->getHeartbeatInterval(), function(){
-            //Set a new timeout (1 sec seems reasonable)
+            //Set a new timeout (2 sec seems reasonable)
             $this->heartbeat_timer = $this->client->getLoop()->addTimer(2, function(){
                 $this->stream->close();
                 throw new ConnectionLostException();

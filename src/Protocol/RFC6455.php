@@ -141,7 +141,11 @@ class RFC6455 extends AbstractProtocol {
         }
 
         $this->client->setState(Client::STATE_CONNECTED);
-        $this->sendHeartbeat();
+
+        if($this->client->getHeartbeatInterval() !== null){
+            //Start the heartbeat loop
+            $this->onHeartbeat();
+        }
 
     }
 
