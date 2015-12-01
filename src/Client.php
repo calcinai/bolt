@@ -50,6 +50,8 @@ class Client extends EventEmitter {
      */
     private $transport;
 
+    private $heartbeat_interval;
+
     private $state;
 
     const PORT_DEFAULT_HTTP  = 80;
@@ -139,6 +141,10 @@ class Client extends EventEmitter {
         return $this->uri;
     }
 
+    public function getLoop(){
+        return $this->loop;
+    }
+
     public function setOrigin($origin) {
         Request::setDefaultHeader('Origin', $origin);
         return $this;
@@ -146,6 +152,14 @@ class Client extends EventEmitter {
 
     public function send($string) {
         $this->transport->send($string);
+    }
+
+    public function setHeartbeatInterval($interval) {
+        $this->heartbeat_interval = $interval;
+    }
+
+    public function getHeartbeatInterval() {
+        return $this->heartbeat_interval;
     }
 
 }

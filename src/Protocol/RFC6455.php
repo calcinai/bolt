@@ -87,8 +87,8 @@ class RFC6455 extends AbstractProtocol {
             case Frame::OP_CONTINUE:
                 $this->addFragmentToMessage($frame);
                 break;
-            case Frame::OP_PING:
-                //TODO - send pong
+            case Frame::OP_PONG:
+                $this->onHeartbeat();
                 break;
             case Frame::OP_CLOSE:
                 //TODO - close
@@ -141,6 +141,7 @@ class RFC6455 extends AbstractProtocol {
         }
 
         $this->client->setState(Client::STATE_CONNECTED);
+        $this->sendHeartbeat();
 
     }
 
@@ -158,6 +159,11 @@ class RFC6455 extends AbstractProtocol {
     }
 
 
+    public function sendHeartbeat(){
+        $frame = new Frame('', Frame::OP_PING);
+        $this->stream->write($frame->encode());
+
+    }
 
     protected static function generateKey() {
         static $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"$&/()=[]{}0123456789';

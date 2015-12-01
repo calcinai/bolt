@@ -7,6 +7,8 @@
 namespace Calcinai\Bolt\Protocol;
 
 use Calcinai\Bolt\Client;
+use Calcinai\Bolt\Exception\ConnectionLostException;
+use React\EventLoop\Timer\Timer;
 use React\Stream\DuplexStreamInterface;
 
 abstract class AbstractProtocol implements ProtocolInterface {
@@ -20,6 +22,11 @@ abstract class AbstractProtocol implements ProtocolInterface {
      * @var DuplexStreamInterface
      */
     protected $stream;
+
+    /**
+     * @var Timer
+     */
+    protected $heartbeat_timer;
 
     public function __construct(Client $client, DuplexStreamInterface $stream) {
         $this->client = $client;
@@ -45,5 +52,24 @@ abstract class AbstractProtocol implements ProtocolInterface {
         });
 
     }
+
+    public function onHeartbeat(){
+
+        if(isset($this->heartbeat_timer)){
+            $this->heartbeat_timer->cancel();
+        }
+
+        //Set a new timeout (1 sec seems reasonable)
+        $this->heartbeat_timer = $this->client->getLoop()->addTimer(2, function(){
+            $this->stream->close();
+            throw new ConnectionLostException();
+        });
+
+        $this->client->getLoop()->addTimer($this->client->getHeartbeatInterval(), function(){
+            $this->sendHeartbeat();
+        });
+    }
+
+    public function sendHeartbeat() {}
 
 }

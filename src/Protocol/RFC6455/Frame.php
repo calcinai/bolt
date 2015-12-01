@@ -70,6 +70,10 @@ class Frame {
         return $this->frame_masked === 0b1;
     }
 
+    public function isControlFrame(){
+        return in_array($this->frame_opcode, [self::OP_CLOSE, self::OP_PING, self::OP_PONG]);
+    }
+
     public function isFinalFragment(){
         return $this->frame_fin === 0b1;
     }
@@ -172,16 +176,24 @@ class Frame {
     public function decode(&$buffer){
 
         //unpack n takes 2 bytes
-        $control = current(unpack('n', $this->eatBytes($buffer, 2)));
+        $control = current(unpack('C', $this->eatBytes($buffer, 1)));
 
-        //Go through all the bits, shifting along the way.
-        $this->frame_length = self::extractBits($control, self::FRAME_BITS_LENGTH);
-        $this->frame_masked = self::extractBits($control, self::FRAME_BITS_MASKED);
         $this->frame_opcode = self::extractBits($control, self::FRAME_BITS_OPCODE);
         $this->frame_rsv3 = self::extractBits($control, self::FRAME_BITS_RSV3);
         $this->frame_rsv2 = self::extractBits($control, self::FRAME_BITS_RSV2);
         $this->frame_rsv1 = self::extractBits($control, self::FRAME_BITS_RSV1);
         $this->frame_fin = self::extractBits($control, self::FRAME_BITS_FIN);
+
+        if($this->isControlFrame()){
+            //We know this by now, no need to decode further
+            return;
+        }
+
+        $payload_info = current(unpack('C', $this->eatBytes($buffer, 1)));
+
+        //Go through all the bits, shifting along the way.
+        $this->frame_length = self::extractBits($payload_info, self::FRAME_BITS_LENGTH);
+        $this->frame_masked = self::extractBits($payload_info, self::FRAME_BITS_MASKED);
 
 
         if($this->frame_length === 126){
