@@ -17,4 +17,5 @@ class HiBi10 extends RFC6455 {
     public static function getVersion() {
         return 8;
     }
+
 }

@@ -7,15 +7,13 @@
 
 namespace Calcinai\Bolt;
 
-use Calcinai\Bolt\HTTP\Request;
 use Calcinai\Bolt\Protocol\ProtocolInterface;
 use Calcinai\Bolt\Protocol\RFC6455;
-use Calcinai\Bolt\Stream\Connector;
 use Evenement\EventEmitter;
 use React\Dns\Resolver\Resolver;
 use React\EventLoop\LoopInterface;
-use React\SocketClient\SecureConnector;
-use React\Stream\DuplexStreamInterface;
+use React\Socket\ConnectionInterface;
+use React\Socket\Connector;
 
 class Client extends EventEmitter {
 
@@ -62,7 +60,6 @@ class Client extends EventEmitter {
     const STATE_CLOSING     = 'closing';
     const STATE_CLOSED      = 'closed';
 
-
     public function __construct($uri, LoopInterface $loop, Resolver $resolver = null, $protocol = null){
 
         if(false === filter_var($uri, FILTER_VALIDATE_URL)){
@@ -78,7 +75,7 @@ class Client extends EventEmitter {
             $this->protocol = RFC6455::class;
         }
 
-        $this->uri = (object) parse_url($uri);
+        $this->uri = $uri;
         $this->loop = $loop;
         $this->resolver = $resolver;
         $this->state = self::STATE_CLOSED;
@@ -87,28 +84,32 @@ class Client extends EventEmitter {
 
     public function connect() {
 
-        $connector = new Connector($this->loop, $this->resolver);
+        $connector = new Connector($this->loop, ['dns' => $this->resolver, 'timeout' => 5]);
 
-        switch($this->uri->scheme){
+        $uri = (object) parse_url($this->uri);
+
+        switch($uri->scheme){
             case 'ws':
-                $port = isset($this->uri->port) ? $this->uri->port : self::PORT_DEFAULT_HTTP;
+                $scheme = 'tcp';
+                $port = isset($uri->port) ? $uri->port : self::PORT_DEFAULT_HTTP;
                 break;
             case 'wss':
-                $port = isset($this->uri->port) ? $this->uri->port : self::PORT_DEFAULT_HTTPS;
-                //Upgrade the connector
-                $connector = new SecureConnector($connector, $this->loop);
+                $scheme = 'tls';
+                $port = isset($uri->port) ? $uri->port : self::PORT_DEFAULT_HTTPS;
                 break;
             default:
-                throw new \InvalidArgumentException(sprintf('Invalid scheme [%s]', $this->uri->scheme));
+                throw new \InvalidArgumentException(sprintf('Invalid scheme [%s]', $uri->scheme));
         }
 
         $that = $this;
-        $connector->create($this->uri->host, $port)->then(function(DuplexStreamInterface $stream) use($that) {
+
+        $this->setState(self::STATE_CONNECTING);
+
+        return $connector->connect($scheme . '://' . $uri->host . ':' . $port)->then(function(ConnectionInterface $stream) use($that) {
             $that->transport = new $that->protocol($that, $stream);
             $that->transport->upgrade();
         });
 
-        $this->setState(self::STATE_CONNECTING);
     }
 
     public function setState($state){
@@ -144,11 +145,6 @@ class Client extends EventEmitter {
 
     public function getLoop(){
         return $this->loop;
-    }
-
-    public function setOrigin($origin) {
-        Request::setDefaultHeader('Origin', $origin);
-        return $this;
     }
 
     public function send($string) {
