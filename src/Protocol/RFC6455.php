@@ -7,176 +7,115 @@
 namespace Calcinai\Bolt\Protocol;
 
 use Calcinai\Bolt\Client;
-use Calcinai\Bolt\Exception\IncompleteFrameException;
-use Calcinai\Bolt\Exception\IncompletePayloadException;
-use Calcinai\Bolt\HTTP\Request;
-use Calcinai\Bolt\HTTP\Response;
-use Calcinai\Bolt\Message;
-use Calcinai\Bolt\Protocol\RFC6455\Frame;
+use GuzzleHttp\Psr7\Uri;
+use Ratchet\RFC6455\Messaging\Frame;
+use Ratchet\RFC6455\Messaging\FrameInterface;
+use Ratchet\RFC6455\Messaging\MessageBuffer;
+use Ratchet\RFC6455\Messaging\MessageInterface;
+use Ratchet\RFC6455\Handshake\ClientNegotiator;
+use Ratchet\RFC6455\Messaging\CloseFrameChecker;
+
+use function GuzzleHttp\Psr7\parse_response;
 
 class RFC6455 extends AbstractProtocol {
 
-    /**
-     * @var Frame
-     */
-    private $current_frame;
+    /** @var ClientNegotiator */
+    private $negotiator;
 
-    /**
-     * @var Message
-     */
-    private $current_message;
-    private $websocket_key;
+    /** @var \GuzzleHttp\Psr7\Request */
+    private $connection_request;
 
-    const WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+    /** @var MessageBuffer */
+    private $message_buffer;
 
     public function upgrade() {
 
-        $this->sendUpgradeRequest();
+        $this->negotiator = new ClientNegotiator();
+
+        /** @var \GuzzleHttp\Psr7\Request $request */
+        $this->connection_request = $this->negotiator->generateRequest(new Uri($this->client->getURI()));
+
+        // If your WebSocket server uses Basic Auth this needs to be added manually as a header
+        $uri = parse_url($this->client->getURI());
+
+        if(isset($uri['user']) || isset($uri['pass'])){
+            $this->connection_request = $this->connection_request->withAddedHeader('Authorization', 'Basic ' . base64_encode($uri['user'] . ':' . $uri['pass']));
+        }
+
+        $this->stream->write(\GuzzleHttp\Psr7\str($this->connection_request));
+
     }
 
     public function onStreamData(&$buffer) {
 
         if($this->client->getState() !== Client::STATE_CONNECTED){
 
-            if(null === $response = Response::create($buffer)){
+            $response = parse_response($buffer);
+
+            if (false === $this->negotiator->validateResponse($this->connection_request, $response)) {
+                // Invalid response from server
+                $this->client->setState(Client::STATE_CLOSING);
+                $this->stream->end();
+
                 return false;
+
+            } else {
+
+                $this->client->setState(Client::STATE_CONNECTED);
+
+                $that = $this;
+
+                $this->message_buffer = new MessageBuffer(
+                    new CloseFrameChecker(),
+                    function (MessageInterface $msg) use ($that){
+                        $that->client->emit('message', [$msg->getPayload()]);
+                    },
+                    function(FrameInterface $frame) use ($that){
+                        $that->processControlFrame($frame);
+                    },
+                    false
+                );
+
+                $buffer = $response->getBody()->getContents();
+
             }
 
-            $this->processUpgrade($response);
-
-            //In this case, the response will have no body if it was just an upgrade
-            if(!$response->hasBody()){
-                return true;
-            }
-
-            //If we get to here, it had some body which will be the beginning of a (or complete) WS frame
-            $buffer = $response->getBody();
         }
 
+        $this->message_buffer->onData($buffer);
 
-        try {
-            if(!isset($this->current_frame)){
-                $this->current_frame = new Frame();
-            }
-            $overflow = $this->current_frame->appendBuffer($buffer);
-        } catch (IncompletePayloadException $e){
-            return true;
-        } catch (IncompleteFrameException $e){
-            return false;
-        }
-
-
-        //At this point we have a complete frame
-        $this->processFrame($this->current_frame);
-
-        unset($this->current_frame);
-
-        //Now that we're done, we can repeat/recurse for the overflow as fragment is PBR
-        if($overflow !== ''){
-            $this->onStreamData($overflow);
-        }
         return true;
+
     }
 
-
-    private function processFrame(Frame $frame) {
+    public function processControlFrame(FrameInterface $frame) {
 
         switch($frame->getOpcode()){
-            case Frame::OP_BINARY:
-            case Frame::OP_TEXT:
-            case Frame::OP_CONTINUE:
-                $this->addFragmentToMessage($frame);
+
+            case Frame::OP_PING:
+                $f = new Frame($frame->getPayload(), true, Frame::OP_PONG);
+                $this->stream->write($f->maskPayload()->getContents());
                 break;
             case Frame::OP_PONG:
                 $this->onHeartbeat();
                 break;
             case Frame::OP_CLOSE:
-                //TODO - close
+                $f = new Frame($frame->getPayload(), true, Frame::OP_CLOSE);
+                $this->stream->end($f->maskPayload()->getContents());
                 break;
         }
-    }
-
-    private function addFragmentToMessage(Frame $frame) {
-        if(!isset($this->current_message)){
-            $this->current_message = new Message();
-        }
-
-        $this->current_message->addBody($frame->getPayload())
-            ->setIsComplete($frame->isFinalFragment());
-
-        if($this->current_message->isComplete()){
-            $this->client->emit('message', [$this->current_message->getBody()]);
-            unset($this->current_message);
-        }
-    }
-
-
-    /**
-     * @return Request
-     */
-    private function sendUpgradeRequest() {
-
-        $this->websocket_key = self::generateKey();
-
-        $request = new Request();
-        $request->setURI($this->client->getURI());
-        $request->setHeader('Connection', 'Upgrade');
-        $request->setHeader('Sec-WebSocket-Key', $this->websocket_key);
-        $request->setHeader('Sec-WebSocket-Version', 13);
-        $request->setHeader('Upgrade', 'websocket');
-
-        $this->stream->write($request->toString());
-    }
-
-    private function processUpgrade(Response $response) {
-
-        $swa = 'Sec-WebSocket-Accept';
-
-        if(!$response->hasHeader($swa)){
-            throw new \Exception(sprintf('Server did not respond with a [%s] header', $swa));
-        }
-
-        if($response->getHeader($swa) !== $this->getExpectedAcceptKey()){
-            throw new \Exception(sprintf('[%s] header did not match expected value', $swa));
-        }
-
-        $this->client->setState(Client::STATE_CONNECTED);
-
-        if($this->client->getHeartbeatInterval() !== null){
-            //Start the heartbeat loop
-            $this->onHeartbeat();
-        }
 
     }
-
-    public function getExpectedAcceptKey(){
-        if(!isset($this->websocket_key)){
-            //todo handle
-        }
-        return base64_encode(pack('H*', sha1($this->websocket_key . self::WEBSOCKET_GUID)));
-    }
-
 
     public function send($string, $type = Frame::OP_TEXT) {
-        $frame = new Frame($string, $type);
-        $this->stream->write($frame->encode());
+        $frame = new Frame($string, true, $type);
+        $this->stream->write($frame->maskPayload()->getContents());
     }
-
 
     public function sendHeartbeat(){
-        $frame = new Frame('', Frame::OP_PING);
-        $this->stream->write($frame->encode());
+        $frame = new Frame(uniqid(), true, Frame::OP_PING);
+        $this->stream->write($frame->maskPayload()->getContents());
 
-    }
-
-    protected static function generateKey() {
-        static $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!"$&/()=[]{}0123456789';
-        $key = '';
-        $chars_length = strlen($chars);
-        for ($i = 0; $i < 16; $i++){
-            $key .= $chars[mt_rand(0, $chars_length-1)];
-        }
-        return base64_encode($key);
     }
 
     public static function getVersion() {
