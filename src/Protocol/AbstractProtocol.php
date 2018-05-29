@@ -76,7 +76,7 @@ abstract class AbstractProtocol implements ProtocolInterface {
     public function onHeartbeat(){
 
         if(isset($this->heartbeat_timer)){
-            $this->heartbeat_timer->cancel();
+            $this->client->getLoop()->cancelTimer($this->heartbeat_timer);
         }
 
         $this->startHeartbeat();
