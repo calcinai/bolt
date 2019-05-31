@@ -8,9 +8,7 @@ This was built purely to be a client, as the majority of the WS clients availabl
     
 Using composer:
 
-    "require": {
-        "calcinai/bolt": "^0.1"
-    }    
+    composer require calcinai/bolt   
 
 
 # Usage
