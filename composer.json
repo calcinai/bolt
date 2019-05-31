@@ -3,7 +3,7 @@
     "description": "Asynchronous WebSocket client",
     "type": "Library",
     "require": {
-        "react/socket": "^0.8.11",
+        "react/socket": "^1.2.0",
         "ratchet/rfc6455": "^0.2.4"
     },
     "require-dev": {
