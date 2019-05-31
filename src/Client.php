@@ -19,6 +19,7 @@ use React\Socket\Connector;
 class Client extends EventEmitter
 {
 
+
     /**
      * @var LoopInterface
      */
@@ -52,6 +53,11 @@ class Client extends EventEmitter
 
     private $heartbeat_interval;
 
+    /**
+     * @var bool
+     */
+    public $use_exceptions;
+
     private $state;
 
     const PORT_DEFAULT_HTTP  = 80;
@@ -83,6 +89,7 @@ class Client extends EventEmitter
         $this->resolver = $resolver;
         $this->state = self::STATE_CLOSED;
         $this->heartbeat_interval = null;
+        $this->use_exceptions = true;
     }
 
     public function connect()
@@ -168,6 +175,19 @@ class Client extends EventEmitter
     public function getHeartbeatInterval()
     {
         return $this->heartbeat_interval;
+    }
+
+    public function useExceptions()
+    {
+        return $this->use_exceptions;
+    }
+
+    /**
+     * @param bool $use_exceptions
+     */
+    public function setUseExceptions($use_exceptions)
+    {
+        $this->use_exceptions = $use_exceptions;
     }
 
 }

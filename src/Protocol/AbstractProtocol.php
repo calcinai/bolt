@@ -11,7 +11,8 @@ use Calcinai\Bolt\Exception\ConnectionLostException;
 use React\EventLoop\Timer\Timer;
 use React\Socket\ConnectionInterface;
 
-abstract class AbstractProtocol implements ProtocolInterface {
+abstract class AbstractProtocol implements ProtocolInterface
+{
 
     /**
      * @var Client
@@ -28,7 +29,8 @@ abstract class AbstractProtocol implements ProtocolInterface {
      */
     protected $heartbeat_timer;
 
-    public function __construct(Client $client, ConnectionInterface $stream) {
+    public function __construct(Client $client, ConnectionInterface $stream)
+    {
         $this->client = $client;
         $this->stream = $stream;
 
@@ -41,7 +43,7 @@ abstract class AbstractProtocol implements ProtocolInterface {
             $buffer .= $data;
 
             //If the handler returns true, was successfully processed and can empty buffer
-            if($that->onStreamData($buffer)) {
+            if ($that->onStreamData($buffer)) {
                 $buffer = '';
             }
         });
@@ -51,20 +53,23 @@ abstract class AbstractProtocol implements ProtocolInterface {
             $client->setState(Client::STATE_CLOSED);
         });
 
-        $this->client->on('connect', function(){
-            if(null !== $this->client->getHeartbeatInterval()){
+        $this->client->on('connect', function () {
+            if (null !== $this->client->getHeartbeatInterval()) {
                 $this->startHeartbeat();
             }
         });
     }
 
-    public function startHeartbeat(){
+    public function startHeartbeat()
+    {
 
-        $this->client->getLoop()->addTimer($this->client->getHeartbeatInterval(), function(){
+        $this->client->getLoop()->addTimer($this->client->getHeartbeatInterval(), function () {
             //Set a new timeout (2 sec seems reasonable)
-            $this->heartbeat_timer = $this->client->getLoop()->addTimer(2, function(){
+            $this->heartbeat_timer = $this->client->getLoop()->addTimer(2, function () {
                 $this->stream->close();
-                throw new ConnectionLostException();
+                if ($this->client->useExceptions()) {
+                    throw new ConnectionLostException();
+                }
             });
 
             $this->sendHeartbeat();
@@ -73,9 +78,10 @@ abstract class AbstractProtocol implements ProtocolInterface {
 
     }
 
-    public function onHeartbeat(){
+    public function onHeartbeat()
+    {
 
-        if(isset($this->heartbeat_timer)){
+        if (isset($this->heartbeat_timer)) {
             $this->client->getLoop()->cancelTimer($this->heartbeat_timer);
         }
 
@@ -83,6 +89,8 @@ abstract class AbstractProtocol implements ProtocolInterface {
 
     }
 
-    public function sendHeartbeat() {}
+    public function sendHeartbeat()
+    {
+    }
 
 }
