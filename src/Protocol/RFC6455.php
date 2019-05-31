@@ -8,16 +8,16 @@ namespace Calcinai\Bolt\Protocol;
 
 use Calcinai\Bolt\Client;
 use GuzzleHttp\Psr7\Uri;
+use Ratchet\RFC6455\Handshake\ClientNegotiator;
+use Ratchet\RFC6455\Messaging\CloseFrameChecker;
 use Ratchet\RFC6455\Messaging\Frame;
 use Ratchet\RFC6455\Messaging\FrameInterface;
 use Ratchet\RFC6455\Messaging\MessageBuffer;
 use Ratchet\RFC6455\Messaging\MessageInterface;
-use Ratchet\RFC6455\Handshake\ClientNegotiator;
-use Ratchet\RFC6455\Messaging\CloseFrameChecker;
-
 use function GuzzleHttp\Psr7\parse_response;
 
-class RFC6455 extends AbstractProtocol {
+class RFC6455 extends AbstractProtocol
+{
 
     /** @var ClientNegotiator */
     private $negotiator;
@@ -28,7 +28,8 @@ class RFC6455 extends AbstractProtocol {
     /** @var MessageBuffer */
     private $message_buffer;
 
-    public function upgrade() {
+    public function upgrade()
+    {
 
         $this->negotiator = new ClientNegotiator();
 
@@ -38,17 +39,19 @@ class RFC6455 extends AbstractProtocol {
         // If your WebSocket server uses Basic Auth this needs to be added manually as a header
         $uri = parse_url($this->client->getURI());
 
-        if(isset($uri['user']) || isset($uri['pass'])){
-            $this->connection_request = $this->connection_request->withAddedHeader('Authorization', 'Basic ' . base64_encode($uri['user'] . ':' . $uri['pass']));
+        if (isset($uri['user']) || isset($uri['pass'])) {
+            $this->connection_request = $this->connection_request->withAddedHeader('Authorization',
+                'Basic ' . base64_encode($uri['user'] . ':' . $uri['pass']));
         }
 
         $this->stream->write(\GuzzleHttp\Psr7\str($this->connection_request));
 
     }
 
-    public function onStreamData(&$buffer) {
+    public function onStreamData(&$buffer)
+    {
 
-        if($this->client->getState() !== Client::STATE_CONNECTED){
+        if ($this->client->getState() !== Client::STATE_CONNECTED) {
 
             $response = parse_response($buffer);
 
@@ -67,10 +70,10 @@ class RFC6455 extends AbstractProtocol {
 
                 $this->message_buffer = new MessageBuffer(
                     new CloseFrameChecker(),
-                    function (MessageInterface $msg) use ($that){
+                    function (MessageInterface $msg) use ($that) {
                         $that->client->emit('message', [$msg->getPayload()]);
                     },
-                    function(FrameInterface $frame) use ($that){
+                    function (FrameInterface $frame) use ($that) {
                         $that->processControlFrame($frame);
                     },
                     false
@@ -88,9 +91,10 @@ class RFC6455 extends AbstractProtocol {
 
     }
 
-    public function processControlFrame(FrameInterface $frame) {
+    public function processControlFrame(FrameInterface $frame)
+    {
 
-        switch($frame->getOpcode()){
+        switch ($frame->getOpcode()) {
 
             case Frame::OP_PING:
                 $f = new Frame($frame->getPayload(), true, Frame::OP_PONG);
@@ -107,18 +111,21 @@ class RFC6455 extends AbstractProtocol {
 
     }
 
-    public function send($string, $type = Frame::OP_TEXT) {
+    public function send($string, $type = Frame::OP_TEXT)
+    {
         $frame = new Frame($string, true, $type);
         $this->stream->write($frame->maskPayload()->getContents());
     }
 
-    public function sendHeartbeat(){
+    public function sendHeartbeat()
+    {
         $frame = new Frame(uniqid(), true, Frame::OP_PING);
         $this->stream->write($frame->maskPayload()->getContents());
 
     }
 
-    public static function getVersion() {
+    public static function getVersion()
+    {
         return 10;
     }
 

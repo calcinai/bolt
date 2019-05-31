@@ -10,12 +10,14 @@ namespace Calcinai\Bolt;
 use Calcinai\Bolt\Protocol\ProtocolInterface;
 use Calcinai\Bolt\Protocol\RFC6455;
 use Evenement\EventEmitter;
+use Ratchet\RFC6455\Messaging\Frame;
 use React\Dns\Resolver\Resolver;
 use React\EventLoop\LoopInterface;
 use React\Socket\ConnectionInterface;
 use React\Socket\Connector;
 
-class Client extends EventEmitter {
+class Client extends EventEmitter
+{
 
     /**
      * @var LoopInterface
@@ -55,23 +57,24 @@ class Client extends EventEmitter {
     const PORT_DEFAULT_HTTP  = 80;
     const PORT_DEFAULT_HTTPS = 443;
 
-    const STATE_CONNECTING  = 'connecting';
-    const STATE_CONNECTED   = 'connected';
-    const STATE_CLOSING     = 'closing';
-    const STATE_CLOSED      = 'closed';
+    const STATE_CONNECTING = 'connecting';
+    const STATE_CONNECTED  = 'connected';
+    const STATE_CLOSING    = 'closing';
+    const STATE_CLOSED     = 'closed';
 
-    public function __construct($uri, LoopInterface $loop, Resolver $resolver = null, $protocol = null){
+    public function __construct($uri, LoopInterface $loop, Resolver $resolver = null, $protocol = null)
+    {
 
-        if(false === filter_var($uri, FILTER_VALIDATE_URL)){
+        if (false === filter_var($uri, FILTER_VALIDATE_URL)) {
             throw new \InvalidArgumentException(sprintf('Invalid URI [%s]. Must be in format ws(s)://host:port/path', $uri));
         }
 
-        if($protocol !== null) {
-            if(!in_array(ProtocolInterface::class, class_implements($protocol))){
+        if ($protocol !== null) {
+            if (!in_array(ProtocolInterface::class, class_implements($protocol))) {
                 throw new \InvalidArgumentException(sprintf('%s must implement %s', $protocol, ProtocolInterface::class));
             }
             $this->protocol = $protocol;
-        } else{
+        } else {
             $this->protocol = RFC6455::class;
         }
 
@@ -82,13 +85,14 @@ class Client extends EventEmitter {
         $this->heartbeat_interval = null;
     }
 
-    public function connect() {
+    public function connect()
+    {
 
         $connector = new Connector($this->loop, ['dns' => $this->resolver, 'timeout' => 5]);
 
-        $uri = (object) parse_url($this->uri);
+        $uri = (object)parse_url($this->uri);
 
-        switch($uri->scheme){
+        switch ($uri->scheme) {
             case 'ws':
                 $scheme = 'tcp';
                 $port = isset($uri->port) ? $uri->port : self::PORT_DEFAULT_HTTP;
@@ -105,17 +109,18 @@ class Client extends EventEmitter {
 
         $this->setState(self::STATE_CONNECTING);
 
-        return $connector->connect($scheme . '://' . $uri->host . ':' . $port)->then(function(ConnectionInterface $stream) use($that) {
+        return $connector->connect($scheme . '://' . $uri->host . ':' . $port)->then(function (ConnectionInterface $stream) use ($that) {
             $that->transport = new $that->protocol($that, $stream);
             $that->transport->upgrade();
         });
 
     }
 
-    public function setState($state){
+    public function setState($state)
+    {
         $this->state = $state;
 
-        switch($state){
+        switch ($state) {
             case self::STATE_CONNECTING:
                 $this->emit('connecting');
                 break;
@@ -135,27 +140,33 @@ class Client extends EventEmitter {
         return $this;
     }
 
-    public function getState(){
+    public function getState()
+    {
         return $this->state;
     }
 
-    public function getURI(){
+    public function getURI()
+    {
         return $this->uri;
     }
 
-    public function getLoop(){
+    public function getLoop()
+    {
         return $this->loop;
     }
 
-    public function send($string) {
-        $this->transport->send($string);
+    public function send($string, $type = Frame::OP_TEXT)
+    {
+        $this->transport->send($string, $type);
     }
 
-    public function setHeartbeatInterval($interval) {
+    public function setHeartbeatInterval($interval)
+    {
         $this->heartbeat_interval = $interval;
     }
 
-    public function getHeartbeatInterval() {
+    public function getHeartbeatInterval()
+    {
         return $this->heartbeat_interval;
     }
 
