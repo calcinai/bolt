@@ -112,14 +112,19 @@ class Client extends EventEmitter
                 throw new \InvalidArgumentException(sprintf('Invalid scheme [%s]', $uri->scheme));
         }
 
-        $that = $this;
-
         $this->setState(self::STATE_CONNECTING);
 
-        return $connector->connect($scheme . '://' . $uri->host . ':' . $port)->then(function (ConnectionInterface $stream) use ($that) {
-            $that->transport = new $that->protocol($that, $stream);
-            $that->transport->upgrade();
-        });
+        return $connector->connect($scheme . '://' . $uri->host . ':' . $port)
+            ->then(function (ConnectionInterface $stream) {
+                $this->transport = new $this->protocol($this, $stream);
+                $this->transport->upgrade();
+            })->otherwise(function (\Exception $e) {
+                $this->emit('error');
+
+                if ($this->use_exceptions) {
+                    throw $e;
+                }
+            });
 
     }
 
